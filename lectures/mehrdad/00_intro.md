@@ -474,22 +474,168 @@ This is only good when you have balanced data. Accuracy is misleading w imbalanc
 1. recall: (# correctly predicted positives) / (# total positives)
    $$recall = \frac{TP}{TP+FN}$$
 
-2. precision: (# correctly predicted positives) / (# postive predictions)
+2. precision: (# correctly predicted positives) / (# positive predictions)
    $$precision = \frac{TP}{TP+FP}$$
 
-3. f1-score: combines precision and recall. F1 is for a GIVEN THRESHHOLD.
+3. f1-score: combines precision and recall. F1 is for a GIVEN THRESH-HOLD.
 
 $$ f1 = 2 \times \frac{ precision \times recall}{precision + recall}$$
 
 If the model makes more positive predictions, generally the recall goes up but the precision goes down (& vice-versa).
 
-If you want to detect fraud and achieve at least 75% accuracy, then you can setthe threshhold for fraud to be lower (i.e, predict_proba > 30% = fraud) - the model will predict fraud more and capture more of the total number of positives. (TO INCREASE RECALL, MAKE THRESHHOLD EASIER). But there will more likely be false positives = DOWN PRECISION.
+If you want to detect fraud and achieve at least 75% accuracy, then you can set the thresh-hold for fraud to be lower (i.e, predict_proba > 30% = fraud) - the model will predict fraud more and capture more of the total number of positives. (TO INCREASE RECALL, MAKE THRESH-HOLD EASIER). But there will more likely be false positives = DOWN PRECISION.
 
-Decrease threshhold: Recall might improve. Precision might go down.
-Increasing threshhold: Precision is likely to go up. Recall might go down.
+Decrease thresh-hold: Recall might improve. Precision might go down.
+Increasing thresh-hold: Precision is likely to go up. Recall might go down.
 
-Overall, we want to find maximal ppoint on PR curse (closest to (1, 1)). We can do this by maximizing the AP (average precision) score (closest to 1). AP score is summary ACROSS THRESHHOLDS. AP measures the quality of `predict_proba`
+Overall, we want to find maximal point on PR curse (closest to (1, 1)). We can do this by maximizing the AP (average precision) score (closest to 1). AP score is summary ACROSS THRESH-HOLDS. AP measures the quality of `predict_proba`
 
-`class_weight = "balanced"`: For imabalanced data, increasing the weight of the smaller class will cause it to be predicted more (but will increase false predictions of it too).
+`class_weight = "balanced"`: For imbalanced data, increasing the weight of the smaller class will cause it to be predicted more (but will increase false predictions of it too).
 
 **_Lecture 10 - Regression Metrics_**
+
+- Carry out feature transformations on somewhat complicated dataset.
+
+Note: not all numeric-looking columns are actually numerical; i.e., type of dwelling in a housing dataset can be represented as numbers. Don't blindly trust automated data-describing tools:
+
+```python
+numeric_looking_columns = X_train.select_dtypes(include=np.number).columns.tolist()
+```
+
+Ordinal encoding:
+
+```python
+ordinal_features_oth = [
+    "BsmtExposure",
+    "BsmtFinType1",
+    "BsmtFinType2",
+    "Functional",
+    "Fence",
+]
+ordering_ordinal_oth = [
+    ["NA", "No", "Mn", "Av", "Gd"],
+    ["NA", "Unf", "LwQ", "Rec", "BLQ", "ALQ", "GLQ"],
+    ["NA", "Unf", "LwQ", "Rec", "BLQ", "ALQ", "GLQ"],
+    ["Sal", "Sev", "Maj2", "Maj1", "Mod", "Min2", "Min1", "Typ"],
+    ["NA", "MnWw", "GdWo", "MnPrv", "GdPrv"],
+]
+```
+
+- Visualize transformed features as a dataframe.
+- Use `Ridge` and `RidgeCV`.
+
+Use Ridge instead of Linear Regression in this course. Ridge uses hyperparameter `alpha`
+
+```python
+lr = make_pipeline(preprocessor, Ridge())
+lr.fit(X_train, y_train);
+lr_preds = lr.predict(X_test)
+
+print("Smallest coefficient: ", lr.named_steps["ridge"].coef_.min())
+print("Largest coefficient:", lr.named_steps["ridge"].coef_.max())
+
+## Cross Validation with Ridge
+pd.DataFrame(cross_validate(lr_pipe, X_train, y_train, cv=10, return_train_score=True))
+```
+
+Because it's so common to want to tune `alpha` with `Ridge`, sklearn provides a class called `RidgeCV`, which automatically tunes `alpha` based on cross-validation.
+
+```python
+alphas = 10.0 ** np.arange(-6, 6, 1)
+ridgecv_pipe = make_pipeline(preprocessor, RidgeCV(alphas=alphas, cv=10))
+ridgecv_pipe.fit(X_train, y_train);
+
+best_alpha = ridgecv_pipe.named_steps["ridgecv"].alpha_
+
+ridge_tuned = make_pipeline(preprocessor, Ridge(alpha=best_alpha)) ## use best alpha
+ridge_tuned.fit(X_train, y_train)
+ridge_preds = ridge_tuned.predict(X_test)
+ridge_preds[:10] ## examine tuned model
+```
+
+- Explain how `alpha` hyperparameter of `Ridge` relates to the fundamental tradeoff.
+
+Higher values of `alpha` means a more restricted model. The values of coefficients are likely to be smaller for higher values of `alpha` compared to lower values of alpha.
+
+- Explain the effect of `alpha` on the magnitude of the learned coefficients.
+
+General intuition: **larger `alpha` leads to smaller coefficients**.
+**Smaller coefficients** mean the predictions are **less sensitive to changes in the data**. Hence **less chance of overfitting**. Too small of coefficients tends to push to underfitting.
+
+Smaller `alpha` leads to bigger coefficients. With the best alpha found by the grid search, the coefficients are somewhere in between.
+
+```python
+param_grid = {"ridge__alpha": 10.0 ** np.arange(-5, 5, 1)}
+
+pipe_ridge = make_pipeline(preprocessor, Ridge())
+
+search = GridSearchCV(pipe_ridge, param_grid, return_train_score=True, n_jobs=-1)
+search.fit(X_train, y_train)
+train_scores = search.cv_results_["mean_train_score"]
+cv_scores = search.cv_results_["mean_test_score"]
+```
+
+- Examine coefficients of transformed features.
+- Appropriately select a scoring metric given a regression problem.
+- Interpret and communicate the meanings of different scoring metrics on regression problems.
+  - MSE, RMSE, $R^2$, MAPE
+
+In regression, you can't just check for equality of classes like in the case of classification. We need a score that reflects how right/wrong a prediciton is.
+
+**1. Mean Squared Error (MSE)**
+
+```python
+preds = ridge_tuned.predict(X_train)
+np.mean((y_train - preds) ** 2)
+```
+
+Perfect predictions would have MSE=0. Downside: MSE units is the unit of the prediction _squared_. This makes it hard to interpret.
+
+**2. Root Mean Squared Error (RMSE)**
+
+```python
+preds = ridge_tuned.predict(X_train)
+np.mean((y_train - preds) ** 2)
+```
+
+RMSE is a more relatable metric than MSE (bc is has same units as target).
+
+**3. $R^2$**
+
+$$R^2(y, \hat{y}) = 1 - \frac{\sum_{i=1}^n (y_i - \hat{y_i})^2}{\sum_{i=1}^n (y_i - \bar{y})^2}$$
+
+$R^2$ measures the proportion of variability in $y$ that can be explained using $X$. The denominator measures the total variance in $y$. (The amount of variability that is left unexplained after performing regression).
+
+NOTE: $\hat{y}$ is prediction. $y$ is Ground Truth. Sum of squared differences between $\hat{y}$ and $y$. $R^2$ = 0 = same as dummy. Negative means worse than dummy. Greater than 0 = better then dummy. Perfect if $R^2$ = 1. The maximum is 1 for perfect predictions. Negative values are very bad: "worse than DummyRegressor" (very bad). Independent of the scale of $y$. So the max is 1.
+
+**4. MAPE**
+
+Percent error: positive (predict too high) and negative (predict too low).
+
+```python
+np.abs(percent_errors) ## Get rid of negatives
+```
+
+And, like MSE, we can take the average over examples. This is called mean absolute percent error (MAPE).
+
+```python
+def my_mape(true, pred):
+    return np.mean(np.abs((pred - true) / true))
+```
+
+i.e., if it returns 0.1, on average, we have around 10% error.
+
+- Apply log-transform on the target values in a regression problem with `TransformedTargetRegressor`.
+
+Does `.fit()` know we care about MAPE? No, it doesn't. Why are we minimizing MSE (or something similar) if we care about MAPE?? When minimizing MSE, the **expensive houses** will _dominate_ because they have the **biggest error**. Which is better for RMSE?
+
+How can we get `.fit()` to think about MAPE? A common practice which tends to work is **log transforming the targets**. That is, transform $y\rightarrow \log(y)$.
+
+When you have prices or count data, the target values are skewed. A common trick in such cases is applying a log transform on the target column to make it more normal and less skewed.
+
+```python
+ttr = TransformedTargetRegressor(
+    Ridge(alpha=best_alpha), func=np.log1p, inverse_func=np.expm1
+) # transformer for log transforming the target
+ttr_pipe = make_pipeline(preprocessor, ttr)
+```
