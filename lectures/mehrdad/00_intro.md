@@ -5,6 +5,7 @@
   - Examples include linear regression, logistic regression, support vector machines (SVM), decision trees, and neural networks trained with labeled data.
 - Unsupervised
   - algorithm is given a dataset without labeled responses. The goal is to find patterns or intrinsic structures in the data.
+  - can't use cross validation??
 
 **_Lecture 2 - Terminology, Baselines, Decision Trees_**
 
